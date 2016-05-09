@@ -1,7 +1,7 @@
 ﻿# php-myutils
 ## IDValidator 身份证验证
 
-···php
+```php
 header("Content-type: text/html; charset=utf-8");
 
 include 'IDValidator.php';
@@ -19,4 +19,5 @@ var_dump($info);
 
 //验证身份证号是否正确
 var_dump($v->isValid("123456789012345678"));
-···
+```
+
