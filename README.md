@@ -21,3 +21,4 @@ var_dump($info);
 var_dump($v->isValid("123456789012345678"));
 ```
 
+参考：http://blog.jdk5.com/zh/php-chinese-personal-id-card-validation/
