@@ -21,4 +21,21 @@ var_dump($info);
 var_dump($v->isValid("123456789012345678"));
 ```
 
-参考：http://blog.jdk5.com/zh/php-chinese-personal-id-card-validation/
+## image 图片处理工具
+
+
+```php
+use com\jdk5\blog\Image\Image;
+require '../Image.php';
+
+$img = new Image();
+$img->load('org.jpg')
+	//->width(200)	//设置生成图片的宽度，高度将按照宽度等比例缩放
+	//->height(200)	//设置生成图片的高度，宽度将按照高度等比例缩放
+	->size(300, 300)	//设置生成图片的宽度和高度
+	->fixed_given_size(true)	//生成的图片是否以给定的宽度和高度为准
+	->keep_ratio(true)		//是否保持原图片的原比例
+	->bgcolor(array(100, 0, 0))	//设置背景颜色，按照rgb格式
+	->quality(50)	//设置生成图片的质量 0-100
+	->save('processed/org-width-resize.jpg');	//保存生成图片的路径
+```
