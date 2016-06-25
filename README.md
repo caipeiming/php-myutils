@@ -35,7 +35,7 @@ $img->load('org.jpg')
 	->size(300, 300)	//设置生成图片的宽度和高度
 	->fixed_given_size(true)	//生成的图片是否以给定的宽度和高度为准
 	->keep_ratio(true)		//是否保持原图片的原比例
-	->bgcolor(array(100, 0, 0))	//设置背景颜色，按照rgb格式
-	->quality(50)	//设置生成图片的质量 0-100
+	->bgcolor("#ffffff")	//设置背景颜色，按照rgb格式
+	->quality(50)	//设置生成图片的质量 0-100，如果生成的图片格式为png格式，数字越大，压缩越大，如果是其他格式，如jpg，gif，数组越小，压缩越大
 	->save('processed/org-width-resize.jpg');	//保存生成图片的路径
 ```

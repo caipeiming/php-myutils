@@ -10,7 +10,7 @@ class Image {
 	public $quality = 75;
 	
 	private $image, $filename, $original_info, $imagestring;
-	private $width, $height, $scale, $fixed_given_size, $keep_ratio, $given_width, $given_height, $bgcolor;
+	private $width, $height, $scale, $fixed_given_size, $keep_ratio, $given_width, $given_height, $bg_color, $angle;
 	
 	/**
 	 * Load an image
@@ -109,16 +109,6 @@ class Image {
 		return $this;
 	}
 	
-	/**
-	 * set background color
-	 * @param array $bgcolor
-	 * @return \com\jdk5\blog\Image\Image
-	 */
-	function bgcolor($bgcolor) {
-		$this->bgcolor = $bgcolor;
-		return $this;
-	}
-
 	/**
 	 * set generete image is fixed_given_size
 	 * @param boolean $fixed_given_size
@@ -233,10 +223,6 @@ class Image {
 		$this->given_height = ($this->given_height == 0 ? $height : $this->given_height);
 		
 		$this->copy($width, $height, 0, 0, 0, 0, $width, $height);
-		
-		if ($this->keep_ratio) {
-			$this->resize_image_and_keep_ratio();
-		}
 	}
 	
 	/**
@@ -286,8 +272,8 @@ class Image {
 				imagefill($new, 0, 0, $transparent_index);
 				imagecolortransparent($new, $transparent_index);
 	
-				if (!empty($this->bgcolor)) {
-					$bg = imagecolorallocate($new, $this->bgcolor[0], $this->bgcolor[1], $this->bgcolor[2]);
+				if (!empty($this->bg_color)) {
+					$bg = imagecolorallocate($new, $this->bg_color['r'], $this->bg_color['g'], $this->bg_color['b']);
 					imagefill($new, 0, 0, $bg);
 				}
 			}
@@ -297,9 +283,9 @@ class Image {
 			imagesavealpha($new, true);
 			$color = imagecolorallocatealpha($new, 0, 0, 0, 127);
 			imagefill($new, 0, 0, $color);
-			if (!empty($this->bgcolor)) {
-				$bg = imagecolorallocate($new, $this->bgcolor[0], $this->bgcolor[1], $this->bgcolor[2]);
-					imagefill($new, 0, 0, $bg);
+			if (!empty($this->bg_color)) {
+				$bg = imagecolorallocate($new, $this->bg_color['r'], $this->bg_color['g'], $this->bg_color['b']);
+				imagefill($new, 0, 0, $bg);
 			}
 		}
 		
@@ -333,8 +319,13 @@ class Image {
 	 *
 	 */
 	function save($filename = null, $quality = null, $format = null) {
+		if ($this->angle) {
+			$this->do_rotate();
+		}
 		$this->resize();
-		
+		if ($this->keep_ratio) {
+			$this->resize_image_and_keep_ratio();
+		}
 		// Determine quality, filename, and format
 		$quality = $quality ?  : $this->quality;
 		$filename = $filename ?  : $this->filename;
@@ -417,5 +408,112 @@ class Image {
 		}
 		
 		return $value;
+	}
+	
+	/**
+	 * Rotate an image
+	 *
+	 * @param int           $angle      0-360
+	 * @param string        $bg_color   Hex color string, array(red, green, blue) or array(red, green, blue, alpha).
+	 *                                  Where red, green, blue - integers 0-255, alpha - integer 0-127
+	 *
+	 * @return SimpleImage
+	 *
+	 */
+	function rotate($angle) {
+		$this->angle = $angle;
+		return $this;
+	}
+	
+	/**
+	 * set background color
+	 * @param array $bgcolor
+	 * @return \com\jdk5\blog\Image\Image
+	 */
+	function bg_color($bg_color){
+		$this->bg_color = $this->normalize_color($bg_color);
+		return $this;
+	}
+	
+	private function do_rotate() {
+		// Perform the rotation
+		if (empty($this->bg_color)) {
+			$bg_color = imagecolorallocatealpha($this->image, 0, 0, 0, 127);
+		} else {
+			$rgba = $this->normalize_color($this->bg_color);
+			$bg_color = imagecolorallocatealpha($this->image, $rgba['r'], $rgba['g'], $rgba['b'], $rgba['a']);			
+		}
+		$new = imagerotate($this->image, -($this->keep_within($this->angle, -360, 360)), $bg_color, 0);
+		imagesavealpha($new, true);
+		imagealphablending($new, true);
+		
+		// Update meta data
+		$this->original_info['width'] = imagesx($new);
+		$this->original_info['height'] = imagesy($new);
+		/* 
+		$this->width = imagesx($new);
+		$this->height = imagesy($new);
+		 */
+		$this->image = $new;
+		return $this;
+	}
+	
+	/**
+	 * Converts a hex color value to its RGB equivalent
+	 *
+	 * @param string        $color  Hex color string, array(red, green, blue) or array(red, green, blue, alpha).
+	 *                              Where red, green, blue - integers 0-255, alpha - integer 0-127
+	 *
+	 * @return array|bool
+	 *
+	 */
+	protected function normalize_color($color) {
+	
+		if (is_string($color)) {
+	
+			$color = trim($color, '#');
+	
+			if (strlen($color) == 6) {
+				list($r, $g, $b) = array(
+						$color[0].$color[1],
+						$color[2].$color[3],
+						$color[4].$color[5]
+				);
+			} elseif (strlen($color) == 3) {
+				list($r, $g, $b) = array(
+						$color[0].$color[0],
+						$color[1].$color[1],
+						$color[2].$color[2]
+				);
+			} else {
+				return false;
+			}
+			return array(
+					'r' => hexdec($r),
+					'g' => hexdec($g),
+					'b' => hexdec($b),
+					'a' => 0
+			);
+	
+		} elseif (is_array($color) && (count($color) == 3 || count($color) == 4)) {
+	
+			if (isset($color['r'], $color['g'], $color['b'])) {
+				return array(
+						'r' => $this->keep_within($color['r'], 0, 255),
+						'g' => $this->keep_within($color['g'], 0, 255),
+						'b' => $this->keep_within($color['b'], 0, 255),
+						'a' => $this->keep_within(isset($color['a']) ? $color['a'] : 0, 0, 127)
+				);
+			} elseif (isset($color[0], $color[1], $color[2])) {
+				return array(
+						'r' => $this->keep_within($color[0], 0, 255),
+						'g' => $this->keep_within($color[1], 0, 255),
+						'b' => $this->keep_within($color[2], 0, 255),
+						'a' => $this->keep_within(isset($color[3]) ? $color[3] : 0, 0, 127)
+				);
+			}
+	
+		}
+		return false;
 	}
 }

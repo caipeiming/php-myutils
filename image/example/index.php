@@ -12,13 +12,14 @@ $img->load('org.jpg')->height(200)->save('processed/org-height-resize.jpg');
 
 $img->load('org.png')->fixed_given_size(true)->keep_ratio(true)->save('processed/org-no-size-resize.png');
 
-$img->load('org.png')->bgcolor(array(100, 0, 0))->quality(100)->size(300, 300)->fixed_given_size(true)->keep_ratio(true)->save('processed/org-size-resize.png');
+$img->load('org.png')->bg_color("#a30000")->quality(100)->size(300, 300)->fixed_given_size(true)->keep_ratio(true)->save('processed/org-size-resize.png');
 
-$img->load('org.png')->bgcolor(array(0, 0, 0))->size(400, 100)->fixed_given_size(true)->keep_ratio(true)->save('processed/400_100.png');
+$img->load('org.png')->bg_color("#ff00ff")->size(400, 100)->fixed_given_size(true)->keep_ratio(true)->save('processed/400_100.png');
 
-$img->load('org.png')->bgcolor(array(0, 0, 0))->size(200, 200)->fixed_given_size(true)->keep_ratio(true)->save('processed/200_200.png');
+$img->load('org.png')->bg_color("#dd0000")->size(200, 200)->fixed_given_size(true)->keep_ratio(true)->save('processed/200_200.png');
 
-
+$img->load('org.png')->rotate(45)->bg_color("#ee2300")->size(250, 187)->fixed_given_size(true)->keep_ratio(true)->save('processed/rotate-45.png');
+$img->load('org.png')->rotate(20)->bg_color("#3300ff")->width(250)->fixed_given_size(true)->keep_ratio(true)->quality(90)->save('processed/rotate-20.jpg');
 
 header("Content-type: text/html; charset=utf-8");
 echo '<h1 style="text-align: center;">生成图片的结果</h1>';
