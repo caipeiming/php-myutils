@@ -12,6 +12,33 @@ class Image {
 	private $image, $filename, $original_info, $imagestring;
 	private $width, $height, $scale, $fixed_given_size, $keep_ratio, $given_width, $given_height, $bg_color, $angle;
 	
+	private $watermark = array();
+	const CENTER = 1;
+	const TOP = 2;
+	const LEFT = 3;
+	const BOTTOM = 4;
+	const RIGHT = 5;
+	const TOP_LEFT = 6;
+	const TOP_RIGHT = 7;
+	const BOTTOM_LEFT = 8;
+	const BOTTOM_RIGHT = 9;
+	const WATERMARK_DIAGONAL_POS = "pos";
+	const WATERMARK_DIAGONAL_NEG = "neg";
+
+	/**
+     * Destroy image resource
+     *
+     */
+    function __destruct() {
+        $this->destructImg($this->image);
+    }
+
+    public function destructImg($img) {
+    	if( $img !== null && get_resource_type($img) === 'gd' ) {
+            imagedestroy($img);
+        }
+    }
+
 	/**
 	 * Load an image
 	 *
@@ -69,7 +96,8 @@ class Image {
 				'orientation' => $this->get_orientation (),
 				'exif' => function_exists ( 'exif_read_data' ) && $info ['mime'] === 'image/jpeg' && $this->imagestring === null ? $this->exif = @exif_read_data ( $this->filename ) : null,
 				'format' => preg_replace ( '/^image\//', '', $info ['mime'] ),
-				'mime' => $info ['mime'] 
+				'mime' => $info ['mime'],
+				'info' => $info
 		);
 		$this->width = 0;
 		$this->height = 0;
@@ -78,6 +106,9 @@ class Image {
 		$this->keep_ratio = false;
 		$this->given_width = 0;
 		$this->given_height=0;
+		$this->bg_color = null;
+		$this->angle = 0;
+		$this->watermark = array();
 		
 		imagesavealpha ( $this->image, true );
 		imagealphablending ( $this->image, true );
@@ -262,37 +293,17 @@ class Image {
 		$new = imagecreatetruecolor($dst_w, $dst_h);
 		$draw_w = $draw_w == 0 ? $this->original_info['width'] : $draw_w;
 		$draw_h = $draw_h == 0 ? $this->original_info['height'] : $draw_h;
-		if( $this->original_info['format'] === 'gif' ) {
-			// Preserve transparency in GIFs
-			$transparent_index = imagecolortransparent($this->image);
-			$palletsize = imagecolorstotal($this->image);
-			if ($transparent_index >= 0 && $transparent_index < $palletsize) {
-				$transparent_color = imagecolorsforindex($this->image, $transparent_index);
-				$transparent_index = imagecolorallocate($new, $transparent_color['red'], $transparent_color['green'], $transparent_color['blue']);
-				imagefill($new, 0, 0, $transparent_index);
-				imagecolortransparent($new, $transparent_index);
-	
-				if (!empty($this->bg_color)) {
-					$bg = imagecolorallocate($new, $this->bg_color['r'], $this->bg_color['g'], $this->bg_color['b']);
-					imagefill($new, 0, 0, $bg);
-				}
-			}
-		} else {
-			// Preserve transparency in PNGs (benign for JPEGs)
-			imagealphablending($new, false);
-			imagesavealpha($new, true);
-			$color = imagecolorallocatealpha($new, 0, 0, 0, 127);
-			imagefill($new, 0, 0, $color);
-			if (!empty($this->bg_color)) {
-				$bg = imagecolorallocate($new, $this->bg_color['r'], $this->bg_color['g'], $this->bg_color['b']);
-				imagefill($new, 0, 0, $bg);
-			}
+		$this->setTransparency($new, $this->original_info['info'], $this->image);
+		if (!empty($this->bg_color)) {
+			$bg = imagecolorallocate($new, $this->bg_color['r'], $this->bg_color['g'], $this->bg_color['b']);
+			imagefill($new, 0, 0, $bg);
 		}
-		
+
 		// Resize
 		$flag = imagecopyresampled ( $new, $this->image, $dst_x, $dst_y, $src_x, $src_y, $draw_w, $draw_h, 
 				$this->original_info['width'], $this->original_info['height'] );
 		if ($flag) {
+			$this->destructImg($this->image);
 			$this->image = $new;
 			$this->original_info['width'] = $dst_w;
 			$this->original_info['height'] = $dst_h;
@@ -320,11 +331,19 @@ class Image {
 	 */
 	function save($filename = null, $quality = null, $format = null) {
 		if ($this->angle) {
-			$this->do_rotate();
+			$image = $this->do_rotate($this->image, $this->angle, $this->bg_color);
+			$this->destructImg($this->image);
+			$this->image = $image;
+			// Update meta data
+			$this->original_info['width'] = imagesx($this->image);
+			$this->original_info['height'] = imagesy($this->image);
 		}
 		$this->resize();
 		if ($this->keep_ratio) {
 			$this->resize_image_and_keep_ratio();
+		}
+		if (!empty($this->watermark)) {
+			$this->do_watermark();
 		}
 		// Determine quality, filename, and format
 		$quality = $quality ?  : $this->quality;
@@ -417,7 +436,7 @@ class Image {
 	 * @param string        $bg_color   Hex color string, array(red, green, blue) or array(red, green, blue, alpha).
 	 *                                  Where red, green, blue - integers 0-255, alpha - integer 0-127
 	 *
-	 * @return SimpleImage
+	 * @return Image
 	 *
 	 */
 	function rotate($angle) {
@@ -435,27 +454,19 @@ class Image {
 		return $this;
 	}
 	
-	private function do_rotate() {
+	private function do_rotate($image, $angle, $color = null) {
 		// Perform the rotation
-		if (empty($this->bg_color)) {
-			$bg_color = imagecolorallocatealpha($this->image, 0, 0, 0, 127);
+		if (empty($color)) {
+			$bg_color = imagecolorallocatealpha($image, 0, 0, 0, 127);
 		} else {
-			$rgba = $this->normalize_color($this->bg_color);
-			$bg_color = imagecolorallocatealpha($this->image, $rgba['r'], $rgba['g'], $rgba['b'], $rgba['a']);			
+			$rgba = $this->normalize_color($color);
+			$bg_color = imagecolorallocatealpha($image, $rgba['r'], $rgba['g'], $rgba['b'], $rgba['a']);			
 		}
-		$new = imagerotate($this->image, -($this->keep_within($this->angle, -360, 360)), $bg_color, 0);
+		$new = imagerotate($image, -($this->keep_within($angle, -360, 360)), $bg_color, 0);
 		imagesavealpha($new, true);
 		imagealphablending($new, true);
 		
-		// Update meta data
-		$this->original_info['width'] = imagesx($new);
-		$this->original_info['height'] = imagesy($new);
-		/* 
-		$this->width = imagesx($new);
-		$this->height = imagesy($new);
-		 */
-		$this->image = $new;
-		return $this;
+		return $new;
 	}
 	
 	/**
@@ -516,4 +527,267 @@ class Image {
 		}
 		return false;
 	}
+
+	/**
+	 * 设置透明背景
+	 * @param image
+	 * @param array
+	 * @param image
+	 */
+	function setTransparency($dst, $info, $src) {
+		switch ($info ['mime']) {
+			case 'image/gif' :
+				// Preserve transparency in GIFs
+				$transparent_index = imagecolortransparent($src);
+				$palletsize = imagecolorstotal($src);
+				if ($transparent_index >= 0 && $transparent_index < $palletsize) {
+					$transparent_color = imagecolorsforindex($src, $transparent_index);
+					$transparent_index = imagecolorallocate($dst, $transparent_color['red'], $transparent_color['green'], $transparent_color['blue']);
+					imagefill($dst, 0, 0, $transparent_index);
+					imagecolortransparent($dst, $transparent_index);
+				}
+			break;
+			default: 
+				imagealphablending($dst, false);
+				imagesavealpha($dst, true);
+				$color = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+				imagefill($dst, 0, 0, $color);
+			break;
+		}
+	}
+
+	/**
+     * watermark
+     *
+     * Overlay an image on top of another, works with 24-bit PNG alpha-transparency
+     *
+     * @param string        $filename        An image filename
+     * @param string        $position       center|top|left|bottom|right|top left|top right|bottom left|bottom right
+     * @param float|int     $opacity        Overlay opacity 0-1
+     * @param int           $x_offset       Horizontal offset in pixels
+     * @param int           $y_offset       Vertical offset in pixels
+     *
+     * @return Image
+     *
+     */
+	public function set_watermark($filename, $position = self::CENTER, $opacity = 1, $x_offset = 0, $y_offset = 0, $angle = "") {
+		if (!file_exists($filename)) {
+			throw new \Exception ( 'watermark file not exist!' );
+		}
+		$this->watermark = array(
+			"filename" => $filename,
+			"position" => $position,
+			"opacity" => $opacity, 
+			"x_offset" => $x_offset, 
+			"y_offset" => $y_offset,
+			"angle" => $angle
+		);
+		return $this;
+	}
+
+	/**
+     * watermark
+     *
+     * Overlay an image on top of another, works with 24-bit PNG alpha-transparency
+     *
+     * @param string        $overlay        An image filename or a Image object
+     * @param string        $position       center|top|left|bottom|right|top left|top right|bottom left|bottom right
+     * @param float|int     $opacity        Overlay opacity 0-1
+     * @param int           $x_offset       Horizontal offset in pixels
+     * @param int           $y_offset       Vertical offset in pixels
+     *
+     * @return Image
+     *
+     */
+    private function do_watermark() {
+    	$img;
+		if (!empty ( $this->watermark['filename'])) {
+			$info = getimagesize ( $this->watermark['filename'] );
+			$isgif = false;
+			switch ($info ['mime']) {
+				case 'image/gif' :
+					$img = imagecreatefromgif ( $this->watermark['filename'] );
+					$isgif = true;
+					break;
+				case 'image/jpeg' :
+					$img = imagecreatefromjpeg ( $this->watermark['filename'] );
+					break;
+				case 'image/png' :
+					$img = imagecreatefrompng ( $this->watermark['filename'] );
+					break;
+				default :
+					throw new \Exception ( 'Invalid image: ' . $this->watermark['filename'] );
+					break;
+			}
+		} elseif (function_exists ( 'getimagesizefromstring' )) {
+			$info = getimagesizefromstring ( $this->imagestring );
+		} else {
+			throw new \Exception ( 'PHP 5.4 is required to use method getimagesizefromstring' );
+		}
+		
+		$ww = $info [0];
+		$wh = $info [1];
+
+		if (!empty($this->watermark['angle'])) {
+			switch ($this->watermark['angle']) {
+				case self::WATERMARK_DIAGONAL_POS :
+					$rad = atan($this->height / $this->width);
+					$angle  = rad2deg($rad);
+					break;
+				case self::WATERMARK_DIAGONAL_NEG :
+					$rad = atan($this->height / $this->width);
+					$angle  = -rad2deg($rad);
+					break;
+				default:
+					$angle = intval($this->watermark['angle']);
+					break;
+			}
+			$i = $this->do_rotate($img, $angle);
+			$this->destructImg($img);
+			$img = $i;
+			$ww = imagesx($img);
+			$wh = imagesy($img);
+		}
+
+		imagesavealpha ( $img, true );
+		imagealphablending ( $img, true );
+
+		if($ww <= $this->width && $wh <= $this->height) {
+			$drawWidth = $ww;
+			$drawHeight = $wh;
+		} else {
+			$drawWidth = $this->width;
+			$drawHeight = $this->height;
+			$sourceRatio = doubleval( $ww / $wh );
+			$targetRatio = doubleval( $this->width / $this->height );
+			
+			if ($sourceRatio != $targetRatio) {
+				if ($sourceRatio > $targetRatio) {
+					//$drawHeight = intval(round($ww / $sourceRatio));
+					$drawHeight = intval ($drawWidth * $wh / $ww);
+				} else {
+					//$drawWidth = intval(round($wh * $sourceRatio));
+					$drawWidth = intval(round($ww * $drawHeight / $wh));
+				}
+			}
+		}
+		$dst = imagecreatetruecolor($drawWidth, $drawHeight);
+		$this->setTransparency($dst, $info, $this->image);
+		imagecopyresampled($dst, $img, 0, 0, 0, 0, $drawWidth, $drawHeight, $ww, $wh);
+        // Convert opacity
+        $opacity = $this->watermark['opacity'] * 100;
+
+        // Determine position
+        switch ($this->watermark['position']) {
+            case self::TOP_LEFT:
+                $x = 0 + $this->watermark['x_offset'];
+                $y = 0 + $this->watermark['y_offset'];
+                break;
+            case self::TOP_RIGHT :
+                $x = $this->width - $drawWidth + $this->watermark['x_offset'];
+                $y = 0 + $this->watermark['y_offset'];
+                break;
+            case self::TOP:
+                $x = ($this->width / 2) - ($drawWidth / 2) + $this->watermark['x_offset'];
+                $y = 0 + $this->watermark['y_offset'];
+                break;
+            case self::BOTTOM_LEFT:
+                $x = 0 + $this->watermark['x_offset'];
+                $y = $this->height - $drawHeight + $this->watermark['y_offset'];
+                break;
+            case self::BOTTOM_RIGHT:
+                $x = $this->width - $drawWidth + $this->watermark['x_offset'];
+                $y = $this->height - $drawHeight + $this->watermark['y_offset'];
+                break;
+            case self::BOTTOM:
+                $x = ($this->width / 2) - ($drawWidth / 2) + $this->watermark['x_offset'];
+                $y = $this->height - $drawHeight + $this->watermark['y_offset'];
+                break;
+            case self::LEFT:
+                $x = 0 + $this->watermark['x_offset'];
+                $y = ($this->height / 2) - ($drawHeight / 2) + $this->watermark['y_offset'];
+                break;
+            case self::RIGHT:
+                $x = $this->width - $drawWidth + $this->watermark['x_offset'];
+                $y = ($this->height / 2) - ($drawHeight / 2) + $this->watermark['y_offset'];
+                break;
+            case self::CENTER:
+            default:
+                $x = ($this->width / 2) - ($drawWidth / 2) + $this->watermark['x_offset'];
+                $y = ($this->height / 2) - ($drawHeight / 2) + $this->watermark['y_offset'];
+                break;
+        }
+
+        // Perform the overlay
+        $this->imagecopymerge_alpha($this->image, $dst, $x, $y, 0, 0, $drawWidth, $drawHeight, $opacity);
+        $this->destructImg($dst);
+        return $this;
+    }
+
+    /**
+     * Same as PHP's imagecopymerge() function, except preserves alpha-transparency in 24-bit PNGs
+     *
+     * @param $dst_im
+     * @param $src_im
+     * @param $dst_x
+     * @param $dst_y
+     * @param $src_x
+     * @param $src_y
+     * @param $src_w
+     * @param $src_h
+     * @param $pct
+     *
+     * @link http://www.php.net/manual/en/function.imagecopymerge.php#88456
+     *
+     */
+    protected function imagecopymerge_alpha($dst_im, $src_im, $dst_x, $dst_y, $src_x, $src_y, $src_w, $src_h, $pct) {
+
+        // Get image width and height and percentage
+        $pct /= 100;
+        $w = imagesx($src_im);
+        $h = imagesy($src_im);
+
+        // Turn alpha blending off
+        imagealphablending($src_im, false);
+
+        // Find the most opaque pixel in the image (the one with the smallest alpha value)
+        $minalpha = 127;
+        for ($x = 0; $x < $w; $x++) {
+            for ($y = 0; $y < $h; $y++) {
+                $alpha = (imagecolorat($src_im, $x, $y) >> 24) & 0xFF;
+                if ($alpha < $minalpha) {
+                    $minalpha = $alpha;
+                }
+            }
+        }
+
+        // Loop through image pixels and modify alpha for each
+        for ($x = 0; $x < $w; $x++) {
+            for ($y = 0; $y < $h; $y++) {
+                // Get current alpha value (represents the TANSPARENCY!)
+                $colorxy = imagecolorat($src_im, $x, $y);
+                $alpha = ($colorxy >> 24) & 0xFF;
+                // Calculate new alpha
+                if ($minalpha !== 127) {
+                    $alpha = 127 + 127 * $pct * ($alpha - 127) / (127 - $minalpha);
+                } else {
+                    $alpha += 127 * $pct;
+                }
+                // Get the color index with new alpha
+                $alphacolorxy = imagecolorallocatealpha($src_im, ($colorxy >> 16) & 0xFF, ($colorxy >> 8) & 0xFF, $colorxy & 0xFF, $alpha);
+                // Set pixel with the new color + opacity
+                if (!imagesetpixel($src_im, $x, $y, $alphacolorxy)) {
+                    return;
+                }
+            }
+        }
+
+        // Copy it
+        imagesavealpha($dst_im, true);
+        imagealphablending($dst_im, true);
+        imagesavealpha($src_im, true);
+        imagealphablending($src_im, true);
+        imagecopy($dst_im, $src_im, $dst_x, $dst_y, $src_x, $src_y, $src_w, $src_h);
+
+    }
 }
