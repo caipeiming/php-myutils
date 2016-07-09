@@ -222,9 +222,9 @@ class Image {
 				
 				if ($sourceRatio != $targetRatio) {
 					if ($sourceRatio > $targetRatio) {
-						$drawHeight = intval(round($this->width / $sourceRatio));
+						$drawHeight = round(round($this->width / $sourceRatio));
 					} else {
-						$drawWidth = intval(round($this->height * $sourceRatio));
+						$drawWidth = round(round($this->height * $sourceRatio));
 					}
 				}
 				if (!$this->fixed_given_size) {
@@ -235,14 +235,14 @@ class Image {
 				$height = $drawHeight;
 			}
 		} else if ($this->scale > 0) {
-			$width = intval($width * $this->scale);
-			$height = intval($height * $this->scale);
+			$width = round($width * $this->scale);
+			$height = round($height * $this->scale);
 		} else if ($this->width > 0 && $this->height == 0) {
-			$height = intval($this->width * $height / $width);
-			$width = intval($this->width);
+			$height = round($this->width * $height / $width);
+			$width = round($this->width);
 		} else if ($this->width == 0 && $this->height > 0) {
-			$width = intval($this->height * $width / $height);
-			$height = intval($this->height);
+			$width = round($this->height * $width / $height);
+			$height = round($this->height);
 		}
 		if ($width <= 1 || $height <= 1) {
 			throw new \Exception("width or height value error!");
@@ -256,7 +256,7 @@ class Image {
 		$this->copy($width, $height, 0, 0, 0, 0, $width, $height);
 	}
 	
-	/**
+	/**t
 	 * 等比例压缩图片,支持图片格式jpg,jpeg,png
 	 * @param string $dst_dir	上传的文件夹
 	 * @param string $dst_name	上传后的名称，不包括扩展名
@@ -272,6 +272,8 @@ class Image {
 		$dst_w = ceil ( $this->original_info['width'] * $ratio );
 		$dst_x = ($this->given_width - $dst_w)/2;
 		$dst_y = ($this->given_height - $dst_h)/2;
+		$this->width = $this->given_width;
+		$this->height = $this->given_height;
 		return $this->copy($this->given_width, $this->given_height, $dst_x, $dst_y, $src_x, $src_y, 
 				$dst_w, $dst_h);
 	}
@@ -662,11 +664,9 @@ class Image {
 			
 			if ($sourceRatio != $targetRatio) {
 				if ($sourceRatio > $targetRatio) {
-					//$drawHeight = intval(round($ww / $sourceRatio));
-					$drawHeight = intval ($drawWidth * $wh / $ww);
+					$drawHeight = round ($drawWidth * $wh / $ww);
 				} else {
-					//$drawWidth = intval(round($wh * $sourceRatio));
-					$drawWidth = intval(round($ww * $drawHeight / $wh));
+					$drawWidth = round(round($ww * $drawHeight / $wh));
 				}
 			}
 		}
