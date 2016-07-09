@@ -22,10 +22,30 @@ $img->load('org.png')->rotate(45)->bg_color("#ee2300")->size(250, 187)->fixed_gi
 $img->load('org.png')->rotate(20)->bg_color("#3300ff")->width(250)->fixed_given_size(true)->keep_ratio(true)->quality(90)->save('processed/rotate-20.jpg');
 
 // watermark
-$img->load('org.png')->set_watermark('watermarkater.png', Image::CENTER, 0.6, 0, 0, Image::WATERMARK_DIAGONAL_NEG)->save('processed/watermark_diagonal.png');
-$img->load('org.png')->set_watermark('watermarkater.png', Image::CENTER, 0.7)->save('processed/watermark.png');
+$watermark1 = array(
+			"filename" => 'watermarkater.png',
+			"position" => Image::CENTER,
+			"opacity" => 0.6,
+			"x_offset" => 0, 
+			"y_offset" => 0,
+			"angle" => Image::WATERMARK_DIAGONAL_NEG
+		);
+$img->load('org.png')->set_watermark($watermark1)->save('processed/watermark_diagonal.png');
 
-$img->load('butterfly.jpg')->set_watermark('overlay.png', Image::CENTER, 0.8, 0, 0)->save('processed/watermark_handle.png');
+$watermark2 = array(
+			"filename" => 'watermarkater.png',
+			"position" => Image::CENTER,
+			"opacity" => 0.7
+		);
+$img->load('org.png')->set_watermark($watermark2)->save('processed/watermark.png');
+
+$watermark3 = array(
+			"filename" => 'overlay.png',
+			"position" => Image::CENTER,
+			"opacity" => 0.8
+		);
+$img->load('butterfly.jpg')->set_watermark($watermark3)->save('processed/watermark_handle.png');
+
 header("Content-type: text/html; charset=utf-8");
 echo '<h1 style="text-align: center;">生成图片的结果</h1>';
 $pre = "./processed/";

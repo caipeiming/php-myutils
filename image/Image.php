@@ -561,27 +561,26 @@ class Image {
      *
      * Overlay an image on top of another, works with 24-bit PNG alpha-transparency
      *
-     * @param string        $filename        An image filename
-     * @param string        $position       center|top|left|bottom|right|top left|top right|bottom left|bottom right
-     * @param float|int     $opacity        Overlay opacity 0-1
-     * @param int           $x_offset       Horizontal offset in pixels
-     * @param int           $y_offset       Vertical offset in pixels
-     *
+     * @param array			$params		example:
+     * array(
+     * 		"filename" => "watermarkater.png",	//水印文件
+     * 		"position" => self::CENTER,	//水印的位置，分别为:center|top|left|bottom|right|top left|top right|bottom left|bottom right
+     * 		"opacity" => 1,	//水印的透明度，可以为0-1的任意数值，默认为1
+     * 		"x_offset" => 0,	//加水印的x轴偏移量，默认为0
+     * 		"y_offset" => 0,	//加水印的y轴偏移量，默认为0
+     * 		"angle" => self::WATERMARK_DIAGONAL_NEG	//水印的旋转角度，可以为-360-360，如果为WATERMARK_DIAGONAL_POS或WATERMARK_DIAGONAL_NEG，则沿着生成图片的对角线旋转，默认为0
      * @return Image
-     *
      */
-	public function set_watermark($filename, $position = self::CENTER, $opacity = 1, $x_offset = 0, $y_offset = 0, $angle = "") {
-		if (!file_exists($filename)) {
+	public function set_watermark($params) {
+		//$filename, $position = self::CENTER, $opacity = 1, $x_offset = 0, $y_offset = 0, $angle = ""
+		if (!file_exists($params['filename'])) {
 			throw new \Exception ( 'watermark file not exist!' );
 		}
-		$this->watermark = array(
-			"filename" => $filename,
-			"position" => $position,
-			"opacity" => $opacity, 
-			"x_offset" => $x_offset, 
-			"y_offset" => $y_offset,
-			"angle" => $angle
-		);
+		isset($params['opacity']) ? "" : $params['opacity'] = 1;
+		isset($params['x_offset']) ? "" : $params['x_offset'] = 0;
+		isset($params['y_offset']) ? "" : $params['y_offset'] = 0;
+		isset($params['angle']) ? "" : $params['angle'] = "";
+		$this->watermark = $params;
 		return $this;
 	}
 
@@ -599,8 +598,8 @@ class Image {
      * @return Image
      *
      */
-    private function do_watermark() {
-    	$img;
+	private function do_watermark() {
+		$img;
 		if (!empty ( $this->watermark['filename'])) {
 			$info = getimagesize ( $this->watermark['filename'] );
 			$isgif = false;
@@ -674,55 +673,55 @@ class Image {
 		$dst = imagecreatetruecolor($drawWidth, $drawHeight);
 		$this->setTransparency($dst, $info, $this->image);
 		imagecopyresampled($dst, $img, 0, 0, 0, 0, $drawWidth, $drawHeight, $ww, $wh);
-        // Convert opacity
-        $opacity = $this->watermark['opacity'] * 100;
+	    // Convert opacity
+	    $opacity = $this->watermark['opacity'] * 100;
 
-        // Determine position
-        switch ($this->watermark['position']) {
-            case self::TOP_LEFT:
-                $x = 0 + $this->watermark['x_offset'];
-                $y = 0 + $this->watermark['y_offset'];
-                break;
-            case self::TOP_RIGHT :
-                $x = $this->width - $drawWidth + $this->watermark['x_offset'];
-                $y = 0 + $this->watermark['y_offset'];
-                break;
-            case self::TOP:
-                $x = ($this->width / 2) - ($drawWidth / 2) + $this->watermark['x_offset'];
-                $y = 0 + $this->watermark['y_offset'];
-                break;
-            case self::BOTTOM_LEFT:
-                $x = 0 + $this->watermark['x_offset'];
-                $y = $this->height - $drawHeight + $this->watermark['y_offset'];
-                break;
-            case self::BOTTOM_RIGHT:
-                $x = $this->width - $drawWidth + $this->watermark['x_offset'];
-                $y = $this->height - $drawHeight + $this->watermark['y_offset'];
-                break;
-            case self::BOTTOM:
-                $x = ($this->width / 2) - ($drawWidth / 2) + $this->watermark['x_offset'];
-                $y = $this->height - $drawHeight + $this->watermark['y_offset'];
-                break;
-            case self::LEFT:
-                $x = 0 + $this->watermark['x_offset'];
-                $y = ($this->height / 2) - ($drawHeight / 2) + $this->watermark['y_offset'];
-                break;
-            case self::RIGHT:
-                $x = $this->width - $drawWidth + $this->watermark['x_offset'];
-                $y = ($this->height / 2) - ($drawHeight / 2) + $this->watermark['y_offset'];
-                break;
-            case self::CENTER:
-            default:
-                $x = ($this->width / 2) - ($drawWidth / 2) + $this->watermark['x_offset'];
-                $y = ($this->height / 2) - ($drawHeight / 2) + $this->watermark['y_offset'];
-                break;
-        }
+	    // Determine position
+	    switch ($this->watermark['position']) {
+	        case self::TOP_LEFT:
+	            $x = 0 + $this->watermark['x_offset'];
+	            $y = 0 + $this->watermark['y_offset'];
+	            break;
+	        case self::TOP_RIGHT :
+	            $x = $this->width - $drawWidth + $this->watermark['x_offset'];
+	            $y = 0 + $this->watermark['y_offset'];
+	            break;
+	        case self::TOP:
+	            $x = ($this->width / 2) - ($drawWidth / 2) + $this->watermark['x_offset'];
+	            $y = 0 + $this->watermark['y_offset'];
+	            break;
+	        case self::BOTTOM_LEFT:
+	            $x = 0 + $this->watermark['x_offset'];
+	            $y = $this->height - $drawHeight + $this->watermark['y_offset'];
+	            break;
+	        case self::BOTTOM_RIGHT:
+	            $x = $this->width - $drawWidth + $this->watermark['x_offset'];
+	            $y = $this->height - $drawHeight + $this->watermark['y_offset'];
+	            break;
+	        case self::BOTTOM:
+	            $x = ($this->width / 2) - ($drawWidth / 2) + $this->watermark['x_offset'];
+	            $y = $this->height - $drawHeight + $this->watermark['y_offset'];
+	            break;
+	        case self::LEFT:
+	            $x = 0 + $this->watermark['x_offset'];
+	            $y = ($this->height / 2) - ($drawHeight / 2) + $this->watermark['y_offset'];
+	            break;
+	        case self::RIGHT:
+	            $x = $this->width - $drawWidth + $this->watermark['x_offset'];
+	            $y = ($this->height / 2) - ($drawHeight / 2) + $this->watermark['y_offset'];
+	            break;
+	        case self::CENTER:
+	        default:
+	            $x = ($this->width / 2) - ($drawWidth / 2) + $this->watermark['x_offset'];
+	            $y = ($this->height / 2) - ($drawHeight / 2) + $this->watermark['y_offset'];
+	            break;
+	    }
 
-        // Perform the overlay
-        $this->imagecopymerge_alpha($this->image, $dst, $x, $y, 0, 0, $drawWidth, $drawHeight, $opacity);
-        $this->destructImg($dst);
-        return $this;
-    }
+	    // Perform the overlay
+	    $this->imagecopymerge_alpha($this->image, $dst, $x, $y, 0, 0, $drawWidth, $drawHeight, $opacity);
+	    $this->destructImg($dst);
+	    return $this;
+	}
 
     /**
      * Same as PHP's imagecopymerge() function, except preserves alpha-transparency in 24-bit PNGs
